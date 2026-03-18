@@ -545,7 +545,21 @@
         </label>
         <button id="refresh-btn" onclick="loadData()">Refresh</button>
         <button id="jump-today" onclick="jumpToToday()" style="padding:0.4rem 1rem;background:#2e7d32;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.85rem;">Jump to Today</button>
+        <a href="#" onclick="var p=document.getElementById('about-panel');p.style.display=p.style.display==='none'?'block':'none';return false;" style="color:#ccc;font-size:0.85rem;text-decoration:none;">About</a>
         <div class="stats" id="stats"></div>
+    </div>
+
+    <div id="about-panel" style="display:none;max-width:1100px;margin:0 auto;padding:1.5rem 2rem 0;">
+        <div style="background:white;border:1px solid #ddd;border-radius:8px;padding:1.5rem;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.88rem;line-height:1.7;color:#444;">
+            <h3 style="margin:0 0 0.75rem;color:#1a2744;font-size:1.1rem;">About This Tool</h3>
+            <p><strong>What it does:</strong> This tool connects GAO (Government Accountability Office) reports to upcoming Congressional committee hearings, so staff can quickly find relevant research and background material.</p>
+            <p style="margin-top:0.5rem"><strong>Data sources:</strong> Hearing schedules come from the <a href="https://api.congress.gov" target="_blank" style="color:#1565c0">Congress.gov API</a> (committee-meeting endpoint for the 119th Congress, both chambers). GAO reports are pulled from 25 topic-specific RSS feeds on <a href="https://www.gao.gov" target="_blank" style="color:#1565c0">gao.gov</a>, covering all major policy areas.</p>
+            <p style="margin-top:0.5rem"><strong>Coverage:</strong> Hearings include both House and Senate committee meetings, hearings, and markups. GAO reports typically include the ~30 most recent items per topic category, yielding ~500-600 unique reports. Reports go back several years depending on the topic.</p>
+            <p style="margin-top:0.5rem"><strong>How matching works:</strong> Each hearing and report is converted to a text representation including titles, committee names, witness organizations, and report summaries. A TF-IDF algorithm with domain-specific synonym expansion (60+ policy term groups covering health, defense, trade, energy, etc.) computes similarity scores. <strong>High match</strong> = strong keyword overlap (score &ge; 0.15). <strong>Medium match</strong> = moderate overlap (score 0.08&ndash;0.15). <strong>Low match</strong> = weak but present overlap (score 0.05&ndash;0.08). The "Matched on" terms show the specific words driving each match.</p>
+            <p style="margin-top:0.5rem"><strong>Limitations:</strong> Matching is keyword-based, not semantic. Two documents about the same topic using different terminology may not match well. The tool indexes only recent GAO reports from RSS feeds, not the complete GAO archive. Some niche topics may have limited GAO coverage.</p>
+            <p style="margin-top:0.5rem"><strong>Updates:</strong> Data refreshes automatically every morning at 6:00 AM ET via GitHub Actions.</p>
+            <p style="margin-top:0.75rem;text-align:right"><a href="#" onclick="document.getElementById('about-panel').style.display='none';return false;" style="color:#1565c0;font-size:0.85rem">Close</a></p>
+        </div>
     </div>
 
     <main id="content">
@@ -710,7 +724,7 @@
                         : '';
 
                     html += `
-                    <div class="hearing-card">
+                    <div class="hearing-card" id="hearing-${h.eventId}">
                         <div class="hearing-header" onclick="toggleHearing('${h.eventId}')">
                             <span class="chamber-badge ${chamberClass}">${h.chamber}</span>
                             <div class="hearing-info">
@@ -767,6 +781,7 @@
                                 </div>
                                 <div class="report-meta">
                                     ${r.gao_number ? r.gao_number + ' &bull; ' : ''}${r.pub_date || ''}
+                                    ${r.match_terms && r.match_terms.length > 0 ? ' &bull; <span style="color:#666">Matched on: ' + r.match_terms.join(', ') + '</span>' : ''}
                                 </div>`;
 
                             if (summary) {
@@ -792,9 +807,13 @@
 
                     html += '</div>'; // reports-section
 
+                    // Share link and Congress.gov link
+                    html += '<div style="margin-top:0.75rem;display:flex;gap:1rem;align-items:center">';
+                    html += `<a class="hearing-link" href="#hearing-${h.eventId}" onclick="copyShareLink('${h.eventId}', event)" style="margin-top:0">Share link</a>`;
                     if (h.congressGovUrl) {
-                        html += `<a class="hearing-link" href="${h.congressGovUrl}" target="_blank">View on Congress.gov &rarr;</a>`;
+                        html += `<a class="hearing-link" href="${h.congressGovUrl}" target="_blank" style="margin-top:0">View on Congress.gov &rarr;</a>`;
                     }
+                    html += '</div>';
 
                     html += '</div></div>'; // hearing-body, hearing-card
                 }
@@ -807,8 +826,12 @@
             // Collapse past date groups by default
             document.querySelectorAll('.past-group').forEach(g => g.classList.add('collapsed-group'));
 
-            // Auto-scroll to today
-            setTimeout(() => jumpToToday(), 100);
+            // If URL has a hearing hash, navigate to it; otherwise scroll to today
+            if (window.location.hash && window.location.hash.startsWith('#hearing-')) {
+                setTimeout(() => openFromHash(), 100);
+            } else {
+                setTimeout(() => jumpToToday(), 100);
+            }
 
             // Update stats
             const totalMatches = hearings.reduce((sum, h) => sum + (h.matchedReports ? h.matchedReports.length : 0), 0);
@@ -840,6 +863,38 @@
                 renderData(allData);
             } catch (e) {
                 content.innerHTML = `<div class="error">Error loading data: ${e.message}. Please try refreshing.</div>`;
+            }
+        }
+
+        function copyShareLink(eventId, event) {
+            if (event) event.preventDefault();
+            const url = window.location.origin + window.location.pathname + '#hearing-' + eventId;
+            navigator.clipboard.writeText(url).then(() => {
+                const el = event.target;
+                const orig = el.textContent;
+                el.textContent = 'Link copied!';
+                setTimeout(() => el.textContent = orig, 2000);
+            }).catch(() => {
+                // Fallback: just navigate to the hash
+                window.location.hash = 'hearing-' + eventId;
+            });
+        }
+
+        function openFromHash() {
+            const hash = window.location.hash;
+            if (hash && hash.startsWith('#hearing-')) {
+                const eventId = hash.replace('#hearing-', '');
+                const card = document.getElementById('hearing-' + eventId);
+                if (card) {
+                    // Expand its parent date group if collapsed
+                    const group = card.closest('.past-group');
+                    if (group) group.classList.remove('collapsed-group');
+                    // Open the hearing body
+                    const body = document.getElementById('body-' + eventId);
+                    if (body) body.classList.add('open');
+                    // Scroll to it
+                    setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+                }
             }
         }
 

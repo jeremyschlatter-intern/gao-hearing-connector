@@ -447,6 +447,21 @@ def build_report_text(report):
     return expand_with_synonyms(text)
 
 
+def get_shared_terms(hearing_vec, report_vec, feature_names, top_k=5):
+    """Find the top shared TF-IDF terms between a hearing and report."""
+    # Element-wise minimum gives shared contribution
+    import numpy as np
+    h = np.asarray(hearing_vec.todense()).flatten()
+    r = np.asarray(report_vec.todense()).flatten()
+    shared = np.minimum(h, r)
+    top_indices = shared.argsort()[::-1][:top_k]
+    terms = []
+    for idx in top_indices:
+        if shared[idx] > 0:
+            terms.append(feature_names[idx])
+    return terms
+
+
 def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.05):
     """Match hearings to relevant GAO reports using TF-IDF similarity."""
     if not hearings or not reports:
@@ -466,6 +481,7 @@ def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.05):
     )
 
     tfidf_matrix = vectorizer.fit_transform(all_texts)
+    feature_names = vectorizer.get_feature_names_out()
 
     n_hearings = len(hearings)
     hearing_vectors = tfidf_matrix[:n_hearings]
@@ -484,6 +500,9 @@ def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.05):
             if score >= min_score:
                 report = reports[idx].copy()
                 report["relevance_score"] = round(score, 4)
+                report["match_terms"] = get_shared_terms(
+                    hearing_vectors[i], report_vectors[idx], feature_names
+                )
                 matched.append(report)
 
         event_id = hearing.get("eventId", str(i))
