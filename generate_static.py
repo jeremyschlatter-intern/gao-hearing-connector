@@ -14,7 +14,8 @@ print(f"  {len(reports)} reports in {time.time()-t0:.1f}s")
 
 print("Fetching hearings...")
 t0 = time.time()
-hearings = get_upcoming_hearings(days_ahead=14, days_back=7)
+# Fetch max range so client-side date filtering works for all selector options
+hearings = get_upcoming_hearings(days_ahead=30, days_back=14)
 print(f"  {len(hearings)} hearings in {time.time()-t0:.1f}s")
 
 print("Matching...")
@@ -55,8 +56,8 @@ api_data = {
     "hearingCount": len(result),
     "reportCount": len(reports),
     "dateRange": {
-        "start": (now - timedelta(days=7)).strftime("%Y-%m-%d"),
-        "end": (now + timedelta(days=14)).strftime("%Y-%m-%d"),
+        "start": (now - timedelta(days=14)).strftime("%Y-%m-%d"),
+        "end": (now + timedelta(days=30)).strftime("%Y-%m-%d"),
     },
     "hearings": result,
 }

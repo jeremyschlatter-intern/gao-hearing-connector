@@ -696,8 +696,23 @@
         function renderData(data) {
             const content = document.getElementById('content');
             const chamberFilter = document.getElementById('chamber-filter').value;
+            const daysAhead = parseInt(document.getElementById('days-ahead').value) || 14;
+            const daysBack = parseInt(document.getElementById('days-back').value) || 7;
 
-            let hearings = data.hearings;
+            // Compute date window in Eastern Time
+            const nowET = toEastern(new Date());
+            nowET.setHours(0,0,0,0);
+            const startDate = new Date(nowET);
+            startDate.setDate(startDate.getDate() - daysBack);
+            const endDate = new Date(nowET);
+            endDate.setDate(endDate.getDate() + daysAhead);
+
+            let hearings = data.hearings.filter(h => {
+                const hDate = toEastern(new Date(h.date));
+                hDate.setHours(0,0,0,0);
+                return hDate >= startDate && hDate <= endDate;
+            });
+
             if (chamberFilter !== 'all') {
                 hearings = hearings.filter(h => h.chamber === chamberFilter);
             }
@@ -827,7 +842,7 @@
                             html += '</div>';
                         }
                     } else {
-                        html += '<div class="no-matches">No closely matching GAO reports found among the ' + data.reportCount + ' reports indexed. GAO may not have recently published on this topic.</div>';
+                        html += '<div class="no-matches">No closely matching GAO reports found among ' + data.reportCount + ' indexed reports. This can happen when GAO has not recently published on the hearing\'s specific topic, or when the hearing is procedural in nature.</div>';
                     }
 
                     html += '</div>'; // reports-section
@@ -926,8 +941,14 @@
             }
         }
 
-        // Re-render when chamber filter changes
+        // Re-render when filters change
         document.getElementById('chamber-filter').addEventListener('change', () => {
+            if (allData) renderData(allData);
+        });
+        document.getElementById('days-ahead').addEventListener('change', () => {
+            if (allData) renderData(allData);
+        });
+        document.getElementById('days-back').addEventListener('change', () => {
             if (allData) renderData(allData);
         });
 
