@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAO Reports &amp; Committee Hearings</title>
+    <style>
+        :root {
+            --navy: #1a2744;
+            --navy-light: #2d3e5f;
+            --gold: #b8860b;
+            --gold-light: #daa520;
+            --bg: #f5f5f0;
+            --white: #ffffff;
+            --text: #333333;
+            --text-light: #666666;
+            --border: #ddd;
+            --green: #2e7d32;
+            --red: #c62828;
+            --blue: #1565c0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        header {
+            background: var(--navy);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        header h1 span {
+            color: var(--gold-light);
+        }
+
+        header .subtitle {
+            font-size: 0.95rem;
+            opacity: 0.85;
+            font-style: italic;
+        }
+
+        .top-bar {
+            background: var(--navy-light);
+            padding: 0.75rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-size: 0.85rem;
+        }
+
+        .top-bar label {
+            color: #ccc;
+        }
+
+        .top-bar select, .top-bar input[type="number"] {
+            padding: 0.3rem 0.5rem;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1a2744;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .top-bar button {
+            padding: 0.4rem 1rem;
+            background: var(--gold);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .top-bar button:hover {
+            background: var(--gold-light);
+        }
+
+        .stats {
+            margin-left: auto;
+            color: #aaa;
+            font-size: 0.8rem;
+        }
+
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem 3rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-light);
+        }
+
+        .loading .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--navy);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error {
+            background: #fce4ec;
+            color: var(--red);
+            padding: 1rem 1.5rem;
+            border-radius: 6px;
+            border-left: 4px solid var(--red);
+            margin: 1rem 0;
+        }
+
+        .date-group {
+            margin-bottom: 2rem;
+        }
+
+        .date-group h2 {
+            font-size: 1.1rem;
+            color: var(--navy);
+            border-bottom: 2px solid var(--gold);
+            padding-bottom: 0.4rem;
+            margin-bottom: 1rem;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .date-group h2 .day-name {
+            font-weight: 400;
+            color: var(--text-light);
+        }
+
+        .hearing-card {
+            background: var(--white);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            transition: box-shadow 0.2s;
+        }
+
+        .hearing-card:hover {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .hearing-header {
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .hearing-header:hover {
+            background: #fafaf5;
+        }
+
+        .chamber-badge {
+            flex-shrink: 0;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.2rem;
+        }
+
+        .chamber-badge.senate {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .chamber-badge.house {
+            background: #fce4ec;
+            color: #c62828;
+        }
+
+        .hearing-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hearing-title {
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.4;
+            color: var(--navy);
+        }
+
+        .hearing-meta {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            margin-top: 0.3rem;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .hearing-meta .committee {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .hearing-meta .separator {
+            margin: 0 0.4rem;
+            color: #ccc;
+        }
+
+        .match-count {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.3rem 0.7rem;
+            background: #f0f7ed;
+            color: var(--green);
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin-top: 0.2rem;
+        }
+
+        .match-count.zero {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .hearing-status {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+            font-weight: 600;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-transform: uppercase;
+        }
+
+        .hearing-status.canceled {
+            background: #fce4ec;
+            color: var(--red);
+        }
+
+        .hearing-status.postponed {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .hearing-body {
+            display: none;
+            border-top: 1px solid var(--border);
+            padding: 1rem 1.25rem;
+        }
+
+        .hearing-body.open {
+            display: block;
+        }
+
+        .witnesses-section {
+            margin-bottom: 1rem;
+        }
+
+        .witnesses-section h4 {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .witness {
+            font-size: 0.9rem;
+            padding: 0.2rem 0;
+        }
+
+        .witness .name { font-weight: 600; }
+        .witness .role { color: var(--text-light); font-style: italic; }
+
+        .reports-section h4 {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-card {
+            background: #fafaf5;
+            border: 1px solid #e8e8e0;
+            border-radius: 6px;
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .report-card .report-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .report-title {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--navy);
+        }
+
+        .report-title a {
+            color: var(--navy);
+            text-decoration: none;
+        }
+
+        .report-title a:hover {
+            color: var(--gold);
+            text-decoration: underline;
+        }
+
+        .relevance-badge {
+            flex-shrink: 0;
+            font-size: 0.72rem;
+            padding: 0.15rem 0.45rem;
+            border-radius: 10px;
+            font-weight: 700;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .relevance-high {
+            background: #e8f5e9;
+            color: var(--green);
+        }
+
+        .relevance-medium {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+
+        .relevance-low {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .report-meta {
+            font-size: 0.78rem;
+            color: var(--text-light);
+            margin-top: 0.3rem;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .report-summary {
+            font-size: 0.85rem;
+            color: var(--text);
+            margin-top: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .report-summary.collapsed {
+            max-height: 4.5em;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .report-summary.collapsed::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2em;
+            background: linear-gradient(transparent, #fafaf5);
+        }
+
+        .show-more {
+            font-size: 0.8rem;
+            color: var(--blue);
+            cursor: pointer;
+            margin-top: 0.3rem;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .show-more:hover {
+            text-decoration: underline;
+        }
+
+        .topic-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+            margin-top: 0.4rem;
+        }
+
+        .topic-tag {
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            background: #e8eaf6;
+            color: #3949ab;
+            border-radius: 3px;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .hearing-link {
+            display: inline-block;
+            margin-top: 0.75rem;
+            font-size: 0.82rem;
+            color: var(--blue);
+            text-decoration: none;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .hearing-link:hover {
+            text-decoration: underline;
+        }
+
+        .no-matches {
+            color: #999;
+            font-style: italic;
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+        }
+
+        .today-marker {
+            background: #fff8e1;
+            border-left: 4px solid var(--gold);
+            padding: 0.5rem 1rem;
+            margin-bottom: 1rem;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-size: 0.85rem;
+            color: var(--gold);
+            font-weight: 600;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-light);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        footer a { color: var(--blue); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-chip {
+            padding: 0.3rem 0.7rem;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            background: white;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            transition: all 0.15s;
+        }
+
+        .filter-chip:hover {
+            border-color: var(--navy);
+        }
+
+        .filter-chip.active {
+            background: var(--navy);
+            color: white;
+            border-color: var(--navy);
+        }
+
+        @media (max-width: 700px) {
+            header { padding: 1rem; }
+            header h1 { font-size: 1.2rem; }
+            main { padding: 1rem; }
+            .top-bar { padding: 0.5rem 1rem; }
+            .hearing-header { flex-direction: column; gap: 0.5rem; }
+            .match-count { align-self: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><span>GAO Reports</span> &amp; Committee Hearings</h1>
+        <div class="subtitle">Connecting Government Accountability Office research to Congressional committee proceedings</div>
+    </header>
+
+    <div class="top-bar">
+        <label>Chamber:
+            <select id="chamber-filter">
+                <option value="all">All Chambers</option>
+                <option value="Senate">Senate</option>
+                <option value="House">House</option>
+            </select>
+        </label>
+        <label>Look ahead:
+            <select id="days-ahead">
+                <option value="7">7 days</option>
+                <option value="14" selected>14 days</option>
+                <option value="30">30 days</option>
+            </select>
+        </label>
+        <label>Look back:
+            <select id="days-back">
+                <option value="3">3 days</option>
+                <option value="7" selected>7 days</option>
+                <option value="14">14 days</option>
+            </select>
+        </label>
+        <button id="refresh-btn" onclick="loadData()">Refresh</button>
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <main id="content">
+        <div class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 1rem;">Fetching hearings and matching GAO reports&hellip;</p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #999;">This may take a moment on first load as we fetch data from Congress.gov and GAO.</p>
+        </div>
+    </main>
+
+    <footer>
+        Data from <a href="https://api.congress.gov" target="_blank">Congress.gov API</a>
+        and <a href="https://www.gao.gov" target="_blank">GAO RSS feeds</a>.
+        Relevance matching powered by TF-IDF text similarity.
+        <br>Built to help Congressional staff find relevant GAO research for upcoming hearings.
+    </footer>
+
+    <script>
+        let allData = null;
+
+        function formatDate(dateStr) {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function formatTime(dateStr) {
+            const d = new Date(dateStr);
+            return d.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZoneName: 'short'
+            });
+        }
+
+        function dateKey(dateStr) {
+            return new Date(dateStr).toLocaleDateString('en-US', {
+                year: 'numeric', month: '2-digit', day: '2-digit'
+            });
+        }
+
+        function isToday(dateStr) {
+            const d = new Date(dateStr);
+            const now = new Date();
+            return d.toDateString() === now.toDateString();
+        }
+
+        function isPast(dateStr) {
+            return new Date(dateStr) < new Date();
+        }
+
+        function relevanceClass(score) {
+            if (score >= 0.15) return 'relevance-high';
+            if (score >= 0.08) return 'relevance-medium';
+            return 'relevance-low';
+        }
+
+        function relevanceLabel(score) {
+            if (score >= 0.15) return 'High';
+            if (score >= 0.08) return 'Medium';
+            return 'Low';
+        }
+
+        function truncateSummary(text, maxLen = 300) {
+            if (!text || text.length <= maxLen) return text;
+            return text.substring(0, maxLen).replace(/\s+\S*$/, '') + '...';
+        }
+
+        function toggleHearing(eventId) {
+            const body = document.getElementById('body-' + eventId);
+            if (body) {
+                body.classList.toggle('open');
+            }
+        }
+
+        function toggleSummary(el) {
+            const summary = el.previousElementSibling;
+            if (summary.classList.contains('collapsed')) {
+                summary.classList.remove('collapsed');
+                el.textContent = 'Show less';
+            } else {
+                summary.classList.add('collapsed');
+                el.textContent = 'Show more';
+            }
+        }
+
+        function renderData(data) {
+            const content = document.getElementById('content');
+            const chamberFilter = document.getElementById('chamber-filter').value;
+
+            let hearings = data.hearings;
+            if (chamberFilter !== 'all') {
+                hearings = hearings.filter(h => h.chamber === chamberFilter);
+            }
+
+            if (hearings.length === 0) {
+                content.innerHTML = '<div class="no-matches" style="padding:3rem;text-align:center;">No hearings found for the selected filters.</div>';
+                return;
+            }
+
+            // Group by date
+            const groups = {};
+            hearings.forEach(h => {
+                const key = dateKey(h.date);
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(h);
+            });
+
+            let html = '';
+            const sortedDates = Object.keys(groups).sort((a, b) => new Date(a) - new Date(b));
+
+            for (const dk of sortedDates) {
+                const dayHearings = groups[dk];
+                const firstDate = dayHearings[0].date;
+                const todayClass = isToday(firstDate) ? ' (Today)' : '';
+                const pastClass = isPast(firstDate) && !isToday(firstDate) ? ' style="opacity: 0.7"' : '';
+
+                html += `<div class="date-group"${pastClass}>`;
+                html += `<h2>${formatDate(firstDate)}${todayClass ? '<span class="day-name"> &mdash; Today</span>' : ''}</h2>`;
+
+                if (isToday(firstDate)) {
+                    html += '<div class="today-marker">Today\'s hearings</div>';
+                }
+
+                for (const h of dayHearings) {
+                    const matchCount = h.matchedReports ? h.matchedReports.length : 0;
+                    const chamberClass = h.chamber.toLowerCase();
+                    const statusHtml = (h.meetingStatus && h.meetingStatus !== 'Scheduled')
+                        ? ` <span class="hearing-status ${h.meetingStatus.toLowerCase()}">${h.meetingStatus}</span>`
+                        : '';
+
+                    html += `
+                    <div class="hearing-card">
+                        <div class="hearing-header" onclick="toggleHearing('${h.eventId}')">
+                            <span class="chamber-badge ${chamberClass}">${h.chamber}</span>
+                            <div class="hearing-info">
+                                <div class="hearing-title">${h.title || 'Untitled Hearing'}${statusHtml}</div>
+                                <div class="hearing-meta">`;
+
+                    if (h.committees && h.committees.length > 0) {
+                        html += `<span class="committee">${h.committees.map(c => c.name).join(', ')}</span>`;
+                    }
+
+                    html += `<span class="separator">|</span>${formatTime(h.date)}`;
+
+                    if (h.location && h.location.building) {
+                        html += `<span class="separator">|</span>${h.location.building}`;
+                        if (h.location.room) html += `, Rm. ${h.location.room}`;
+                    }
+
+                    html += `</div></div>
+                            <div class="match-count ${matchCount === 0 ? 'zero' : ''}">${matchCount} GAO report${matchCount !== 1 ? 's' : ''}</div>
+                        </div>
+
+                        <div class="hearing-body" id="body-${h.eventId}">`;
+
+                    // Witnesses
+                    if (h.witnesses && h.witnesses.length > 0) {
+                        html += '<div class="witnesses-section"><h4>Witnesses</h4>';
+                        for (const w of h.witnesses) {
+                            html += `<div class="witness"><span class="name">${w.name}</span>`;
+                            if (w.position || w.organization) {
+                                html += `<span class="role"> &mdash; ${w.position || ''}${w.position && w.organization ? ', ' : ''}${w.organization || ''}</span>`;
+                            }
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    }
+
+                    // Matched reports
+                    html += '<div class="reports-section"><h4>Related GAO Reports</h4>';
+
+                    if (matchCount > 0) {
+                        for (const r of h.matchedReports) {
+                            const relClass = relevanceClass(r.relevance_score);
+                            const relLabel = relevanceLabel(r.relevance_score);
+                            const summary = r.summary || '';
+                            const needsCollapse = summary.length > 300;
+
+                            html += `
+                            <div class="report-card">
+                                <div class="report-top">
+                                    <div class="report-title">
+                                        <a href="${r.link}" target="_blank">${r.title}</a>
+                                    </div>
+                                    <span class="relevance-badge ${relClass}">${relLabel} match</span>
+                                </div>
+                                <div class="report-meta">
+                                    ${r.gao_number ? r.gao_number + ' &bull; ' : ''}${r.pub_date || ''}
+                                </div>`;
+
+                            if (summary) {
+                                html += `<div class="report-summary ${needsCollapse ? 'collapsed' : ''}">${summary}</div>`;
+                                if (needsCollapse) {
+                                    html += '<div class="show-more" onclick="toggleSummary(this)">Show more</div>';
+                                }
+                            }
+
+                            if (r.topics && r.topics.length > 0) {
+                                html += '<div class="topic-tags">';
+                                for (const t of r.topics) {
+                                    html += `<span class="topic-tag">${t}</span>`;
+                                }
+                                html += '</div>';
+                            }
+
+                            html += '</div>';
+                        }
+                    } else {
+                        html += '<div class="no-matches">No closely matching GAO reports found for this hearing.</div>';
+                    }
+
+                    html += '</div>'; // reports-section
+
+                    if (h.congressGovUrl) {
+                        html += `<a class="hearing-link" href="${h.congressGovUrl}" target="_blank">View on Congress.gov &rarr;</a>`;
+                    }
+
+                    html += '</div></div>'; // hearing-body, hearing-card
+                }
+
+                html += '</div>'; // date-group
+            }
+
+            content.innerHTML = html;
+
+            // Update stats
+            const totalMatches = hearings.reduce((sum, h) => sum + (h.matchedReports ? h.matchedReports.length : 0), 0);
+            document.getElementById('stats').textContent =
+                `${hearings.length} hearings | ${data.reportCount} GAO reports indexed | ${totalMatches} matches | Updated ${new Date(data.generated).toLocaleTimeString()}`;
+        }
+
+        async function loadData() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 1rem;">Fetching hearings and matching GAO reports&hellip;</p>
+                    <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #999;">This may take a moment on first load as we fetch data from Congress.gov and GAO.</p>
+                </div>`;
+
+            const daysAhead = document.getElementById('days-ahead').value;
+            const daysBack = document.getElementById('days-back').value;
+
+            try {
+                const resp = await fetch(`/api/data?days_ahead=${daysAhead}&days_back=${daysBack}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                allData = await resp.json();
+
+                if (allData.error) throw new Error(allData.error);
+
+                renderData(allData);
+            } catch (e) {
+                content.innerHTML = `<div class="error">Error loading data: ${e.message}. Please try refreshing.</div>`;
+            }
+        }
+
+        // Re-render when chamber filter changes
+        document.getElementById('chamber-filter').addEventListener('change', () => {
+            if (allData) renderData(allData);
+        });
+
+        // Load on page load
+        loadData();
+    </script>
+</body>
+</html>
