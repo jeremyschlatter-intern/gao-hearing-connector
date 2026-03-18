@@ -607,14 +607,39 @@
             });
         }
 
+        function toEastern(d) {
+            // Convert to Eastern Time string for date comparisons
+            return new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        }
+
         function isToday(dateStr) {
-            const d = new Date(dateStr);
-            const now = new Date();
+            const d = toEastern(new Date(dateStr));
+            const now = toEastern(new Date());
             return d.toDateString() === now.toDateString();
         }
 
         function isPast(dateStr) {
-            return new Date(dateStr) < new Date();
+            const d = toEastern(new Date(dateStr));
+            const now = toEastern(new Date());
+            // Compare date portions only (not time)
+            d.setHours(0,0,0,0);
+            now.setHours(0,0,0,0);
+            return d < now;
+        }
+
+        function formatReportDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString('en-US', {
+                year: 'numeric', month: 'long', day: 'numeric'
+            });
+        }
+
+        function truncateTitle(title, maxLen) {
+            maxLen = maxLen || 200;
+            if (!title || title.length <= maxLen) return title;
+            return title.substring(0, maxLen).replace(/\s+\S*$/, '') + '&hellip;';
         }
 
         function relevanceClass(score) {
@@ -728,7 +753,7 @@
                         <div class="hearing-header" onclick="toggleHearing('${h.eventId}')">
                             <span class="chamber-badge ${chamberClass}">${h.chamber}</span>
                             <div class="hearing-info">
-                                <div class="hearing-title">${h.title || 'Untitled Hearing'}${statusHtml}</div>
+                                <div class="hearing-title">${truncateTitle(h.title, 200) || 'Untitled Hearing'}${statusHtml}</div>
                                 <div class="hearing-meta">`;
 
                     if (h.committees && h.committees.length > 0) {
@@ -780,7 +805,7 @@
                                     <span class="relevance-badge ${relClass}">${relLabel} match</span>
                                 </div>
                                 <div class="report-meta">
-                                    ${r.gao_number ? r.gao_number + ' &bull; ' : ''}${r.pub_date || ''}
+                                    ${r.gao_number ? r.gao_number + ' &bull; ' : ''}${formatReportDate(r.pub_date)}
                                     ${r.match_terms && r.match_terms.length > 0 ? ' &bull; <span style="color:#666">Matched on: ' + r.match_terms.join(', ') + '</span>' : ''}
                                 </div>`;
 
@@ -836,9 +861,12 @@
             // Update stats
             const totalMatches = hearings.reduce((sum, h) => sum + (h.matchedReports ? h.matchedReports.length : 0), 0);
             const genDate = new Date(data.generated);
+            const updatedStr = genDate.toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                timeZone: 'America/New_York'
+            });
             document.getElementById('stats').textContent =
-                `${hearings.length} hearings | ${data.reportCount} GAO reports indexed | ${totalMatches} matches`;
-            document.getElementById('stats').title = `Last updated: ${genDate.toLocaleString()}`;
+                `${hearings.length} hearings | ${data.reportCount} reports | Updated ${updatedStr} ET`;
         }
 
         async function loadData() {

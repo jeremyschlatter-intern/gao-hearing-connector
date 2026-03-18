@@ -386,7 +386,61 @@ POLICY_SYNONYMS = {
     "IRS": "tax revenue internal service",
     "SSA": "social security administration retirement disability benefits",
     "USPS": "postal service mail delivery",
+    # Finance-specific (strengthen financial matching)
+    "financial services": "banking fintech consumer protection lending credit FDIC",
+    "financial privacy": "data protection consumer information banking fintech privacy",
+    "consumer protection": "financial privacy data security fraud CFPB",
+    "appropriations": "budget spending funding fiscal",
 }
+
+
+# Committee jurisdiction → GAO topic area mapping.
+# Used to boost matches between hearings and reports from the same domain.
+COMMITTEE_TOPIC_MAP = {
+    # House committees
+    "House Armed Services": ["Defense", "Military", "National Security"],
+    "House Financial Services": ["Financial Markets", "Banking", "Financial Regulation"],
+    "House Energy and Commerce": ["Energy", "Health Care", "Telecommunications"],
+    "House Judiciary": ["Justice & Law Enforcement", "Immigration", "Homeland Security"],
+    "House Appropriations": ["Budget"],
+    "House Ways and Means": ["Tax Policy", "Trade", "Economic Development"],
+    "House Education": ["Education", "Workforce"],
+    "House Veterans": ["Veterans", "Health Care"],
+    "House Transportation": ["Transportation", "Infrastructure"],
+    "House Agriculture": ["Agriculture & Food", "Rural"],
+    "House Homeland Security": ["Homeland Security", "Immigration"],
+    "House Foreign Affairs": ["International Affairs"],
+    "House Natural Resources": ["Natural Resources", "Environment"],
+    "House Oversight": ["Government Operations", "Information Security"],
+    "House Science": ["Science & Tech", "Space", "Energy"],
+    "House Small Business": ["Economic Development", "Small Business"],
+    # Senate committees
+    "Senate Armed Services": ["Defense", "Military", "National Security"],
+    "Senate Banking": ["Financial Markets", "Banking", "Financial Regulation"],
+    "Senate Commerce": ["Telecommunications", "Transportation", "Science & Tech"],
+    "Senate Energy": ["Energy", "Natural Resources", "Environment"],
+    "Senate Finance": ["Tax Policy", "Health Care", "Trade"],
+    "Senate HELP": ["Education", "Health Care", "Workforce"],
+    "Senate Judiciary": ["Justice & Law Enforcement", "Immigration"],
+    "Senate Appropriations": ["Budget"],
+    "Senate Foreign Relations": ["International Affairs"],
+    "Senate Homeland Security": ["Homeland Security", "Government Operations"],
+    "Senate Veterans": ["Veterans", "Health Care"],
+    "Senate Agriculture": ["Agriculture & Food", "Rural"],
+    "Senate Environment": ["Environment", "Infrastructure"],
+    "Senate Intelligence": ["Intelligence", "National Security"],
+}
+
+
+def _get_committee_topics(hearing):
+    """Return GAO topic areas associated with the hearing's committee(s)."""
+    topics = set()
+    for c in hearing.get("committees", []):
+        name = c.get("name", "")
+        for key, vals in COMMITTEE_TOPIC_MAP.items():
+            if key.lower() in name.lower():
+                topics.update(vals)
+    return topics
 
 
 def expand_with_synonyms(text):
@@ -448,22 +502,56 @@ def build_report_text(report):
 
 
 def get_shared_terms(hearing_vec, report_vec, feature_names, top_k=5):
-    """Find the top shared TF-IDF terms between a hearing and report."""
-    # Element-wise minimum gives shared contribution
+    """Find the top shared TF-IDF terms between a hearing and report.
+
+    Cleans up output: deduplicates terms where a bigram subsumes a unigram,
+    and filters out very generic single words.
+    """
     import numpy as np
     h = np.asarray(hearing_vec.todense()).flatten()
     r = np.asarray(report_vec.todense()).flatten()
     shared = np.minimum(h, r)
-    top_indices = shared.argsort()[::-1][:top_k]
-    terms = []
+
+    # Generic single words that don't add information
+    GENERIC_TERMS = {
+        "21st", "century", "policy", "program", "report", "federal",
+        "national", "act", "office", "management", "service", "system",
+        "agency", "department", "public", "united", "states", "government",
+        "review", "new", "use", "year", "senior", "institute", "commission",
+    }
+
+    # Get more candidates than we need, then filter
+    top_indices = shared.argsort()[::-1][:top_k * 4]
+    raw_terms = []
     for idx in top_indices:
         if shared[idx] > 0:
-            terms.append(feature_names[idx])
-    return terms
+            raw_terms.append(feature_names[idx])
+
+    # Filter and deduplicate
+    clean = []
+    seen_words = set()
+    for term in raw_terms:
+        words = set(term.split())
+        # Skip generic single-word terms
+        if len(words) == 1 and term in GENERIC_TERMS:
+            continue
+        # Skip if all words are already covered by a previous bigram
+        if words <= seen_words:
+            continue
+        seen_words.update(words)
+        clean.append(term)
+        if len(clean) >= top_k:
+            break
+
+    return clean
 
 
-def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.05):
-    """Match hearings to relevant GAO reports using TF-IDF similarity."""
+def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.08):
+    """Match hearings to relevant GAO reports using TF-IDF similarity.
+
+    Uses committee jurisdiction to boost scores for reports in the same
+    policy domain, and a higher minimum threshold (0.08) to reduce noise.
+    """
     if not hearings or not reports:
         return {}
 
@@ -489,9 +577,24 @@ def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.05):
 
     similarity = cosine_similarity(hearing_vectors, report_vectors)
 
+    # Precompute committee topic sets for jurisdiction boosting
+    hearing_topics = [_get_committee_topics(h) for h in hearings]
+
     results = {}
     for i, hearing in enumerate(hearings):
-        scores = similarity[i]
+        scores = similarity[i].copy()
+
+        # Boost scores for reports whose topic overlaps with committee jurisdiction
+        committee_topics = hearing_topics[i]
+        if committee_topics:
+            for j, report in enumerate(reports):
+                report_topics = set(report.get("topics", []))
+                overlap = committee_topics & report_topics
+                if overlap:
+                    # Boost by 50% of original score for each overlapping topic (max 2x)
+                    boost = min(len(overlap) * 0.5, 1.0)
+                    scores[j] *= (1.0 + boost)
+
         top_indices = scores.argsort()[::-1][:top_n]
 
         matched = []
