@@ -99,16 +99,21 @@ static_html = template.replace(
         }}"""
 )
 
-# Also update the refresh button to just re-render
+# Remove the refresh button (not needed for static site) and look-ahead/look-back selectors
 static_html = static_html.replace(
     '<button id="refresh-btn" onclick="loadData()">Refresh</button>',
-    '<span style="color:#aaa;font-size:0.8rem">Static snapshot</span>'
+    ''
 )
 
-# Update subtitle
+# Convert generated time to Eastern for display
+from zoneinfo import ZoneInfo
+now_et = now.astimezone(ZoneInfo("America/New_York"))
+snapshot_str = now_et.strftime("%B %d, %Y at %I:%M %p ET")
+
+# Update subtitle with snapshot timestamp
 static_html = static_html.replace(
     'Connecting Government Accountability Office research to Congressional committee proceedings',
-    f'Connecting Government Accountability Office research to Congressional committee proceedings<br><span style="font-size:0.8rem;opacity:0.7">Data snapshot: {now.strftime("%B %d, %Y at %I:%M %p")} UTC</span>'
+    f'Connecting Government Accountability Office research to Congressional committee proceedings<br><span style="font-size:0.8rem;opacity:0.7">Data as of {snapshot_str} &mdash; refreshed daily at 6:00 AM ET</span>'
 )
 
 output_path = "docs/index.html"
