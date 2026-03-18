@@ -13,6 +13,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import feedparser
 import requests
@@ -30,14 +31,38 @@ CURRENT_CONGRESS = 119
 _cache = {}
 CACHE_TTL = 1800  # 30 minutes
 
+# Disk cache directory
+CACHE_DIR = Path(__file__).parent / ".cache"
+CACHE_DIR.mkdir(exist_ok=True)
+
 
 def cached_fetch(key, fetch_fn, ttl=CACHE_TTL):
-    """Simple in-memory cache wrapper."""
+    """In-memory + disk cache wrapper."""
     now = time.time()
+    # Check memory cache
     if key in _cache and now - _cache[key]["time"] < ttl:
         return _cache[key]["data"]
+
+    # Check disk cache
+    disk_file = CACHE_DIR / f"{key.replace('/', '_').replace(':', '_')}.json"
+    if disk_file.exists():
+        try:
+            disk_data = json.loads(disk_file.read_text())
+            if now - disk_data.get("time", 0) < ttl:
+                _cache[key] = {"data": disk_data["data"], "time": disk_data["time"]}
+                return disk_data["data"]
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     data = fetch_fn()
     _cache[key] = {"data": data, "time": now}
+
+    # Write to disk cache (best effort)
+    try:
+        disk_file.write_text(json.dumps({"data": data, "time": now}))
+    except Exception:
+        pass
+
     return data
 
 
@@ -55,17 +80,21 @@ def _congress_get(url, params=None, timeout=60, retries=3):
     for attempt in range(retries):
         try:
             resp = requests.get(url, params=params, timeout=timeout)
+            if resp.status_code in (429, 500, 502, 503, 504):
+                if attempt < retries - 1:
+                    time.sleep(2 ** (attempt + 1))
+                    continue
             resp.raise_for_status()
             return resp.json()
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
             if attempt < retries - 1:
-                time.sleep(2 ** attempt)  # exponential backoff
+                time.sleep(2 ** (attempt + 1))
                 continue
             raise
     return None
 
 
-def fetch_committee_meetings(chamber=None, limit=250):
+def fetch_committee_meetings(chamber=None, limit=250, from_date=None):
     """Fetch committee meetings from the Congress.gov API."""
     if chamber:
         url = f"{CONGRESS_API_BASE}/committee-meeting/{CURRENT_CONGRESS}/{chamber}"
@@ -80,6 +109,8 @@ def fetch_committee_meetings(chamber=None, limit=250):
             "limit": min(limit - len(all_meetings), 250),
             "offset": offset,
         }
+        if from_date:
+            params["fromDateTime"] = from_date
         data = _congress_get(url, params=params)
         if not data:
             break
@@ -111,18 +142,25 @@ def get_upcoming_hearings(days_ahead=14, days_back=7):
     start = now - timedelta(days=days_back)
     end = now + timedelta(days=days_ahead)
 
+    # Use fromDateTime to limit results - meetings updated in last 60 days
+    # likely cover all upcoming meetings
+    from_date = (now - timedelta(days=60)).strftime("%Y-%m-%dT00:00:00Z")
+
     def _fetch_all():
         hearings = []
         for chamber in ["house", "senate"]:
             try:
-                meetings = fetch_committee_meetings(chamber=chamber, limit=500)
+                meetings = fetch_committee_meetings(
+                    chamber=chamber, limit=500, from_date=from_date
+                )
                 hearings.extend(meetings)
                 print(f"  Fetched {len(meetings)} {chamber} meetings from listing")
             except Exception as e:
                 print(f"  Error fetching {chamber} meetings: {e}")
         return hearings
 
-    all_meetings = cached_fetch("all_meetings", _fetch_all)
+    cache_key = f"all_meetings_{from_date}"
+    all_meetings = cached_fetch(cache_key, _fetch_all)
     print(f"  Total meetings in listing: {len(all_meetings)}")
 
     # Fetch details in parallel with ThreadPoolExecutor
@@ -139,7 +177,7 @@ def get_upcoming_hearings(days_ahead=14, days_back=7):
             return None
 
     details = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         future_to_meeting = {executor.submit(_fetch_detail, m): m for m in all_meetings}
         for future in as_completed(future_to_meeting):
             try:
