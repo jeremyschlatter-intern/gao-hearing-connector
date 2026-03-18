@@ -493,6 +493,18 @@
             border-color: var(--navy);
         }
 
+        .past-group {
+            opacity: 0.6;
+        }
+
+        .past-group.collapsed-group .hearing-card {
+            display: none;
+        }
+
+        .past-group h2 .day-name {
+            font-size: 0.85rem;
+        }
+
         @media (max-width: 700px) {
             header { padding: 1rem; }
             header h1 { font-size: 1.2rem; }
@@ -532,6 +544,7 @@
             </select>
         </label>
         <button id="refresh-btn" onclick="loadData()">Refresh</button>
+        <button id="jump-today" onclick="jumpToToday()" style="padding:0.4rem 1rem;background:#2e7d32;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:0.85rem;">Jump to Today</button>
         <div class="stats" id="stats"></div>
     </div>
 
@@ -544,10 +557,12 @@
     </main>
 
     <footer>
-        Data from <a href="https://api.congress.gov" target="_blank">Congress.gov API</a>
-        and <a href="https://www.gao.gov" target="_blank">GAO RSS feeds</a>.
-        Relevance matching powered by TF-IDF text similarity.
-        <br>Built to help Congressional staff find relevant GAO research for upcoming hearings.
+        Data from the <a href="https://api.congress.gov" target="_blank">Congress.gov API</a>
+        and <a href="https://www.gao.gov" target="_blank">GAO RSS feeds</a> (25 topic categories).
+        Relevance matching uses TF-IDF text similarity with domain-specific synonym expansion.
+        <br>Updated daily at 6:00 AM ET. Built to help Congressional staff find relevant GAO research for upcoming hearings.
+        <br><a href="https://github.com/jeremyschlatter-intern/gao-hearing-connector" target="_blank">Source code</a>
+        &bull; <a href="https://github.com/jeremyschlatter-intern/gao-hearing-connector/issues" target="_blank">Report an issue</a>
     </footer>
 
     <script>
@@ -612,6 +627,22 @@
             }
         }
 
+        function jumpToToday() {
+            const todayEl = document.getElementById('today-section');
+            if (todayEl) {
+                todayEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                // Find the first future date group
+                const groups = document.querySelectorAll('.date-group');
+                for (const g of groups) {
+                    if (!g.classList.contains('past-group')) {
+                        g.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        return;
+                    }
+                }
+            }
+        }
+
         function toggleSummary(el) {
             const summary = el.previousElementSibling;
             if (summary.classList.contains('collapsed')) {
@@ -648,17 +679,27 @@
             let html = '';
             const sortedDates = Object.keys(groups).sort((a, b) => new Date(a) - new Date(b));
 
+            let hasPastDates = false;
             for (const dk of sortedDates) {
                 const dayHearings = groups[dk];
                 const firstDate = dayHearings[0].date;
-                const todayClass = isToday(firstDate) ? ' (Today)' : '';
-                const pastClass = isPast(firstDate) && !isToday(firstDate) ? ' style="opacity: 0.7"' : '';
+                const today = isToday(firstDate);
+                const past = isPast(firstDate) && !today;
 
-                html += `<div class="date-group"${pastClass}>`;
-                html += `<h2>${formatDate(firstDate)}${todayClass ? '<span class="day-name"> &mdash; Today</span>' : ''}</h2>`;
+                if (past) hasPastDates = true;
 
-                if (isToday(firstDate)) {
+                const groupId = today ? ' id="today-section"' : '';
+                const pastCss = past ? ' class="date-group past-group"' : ' class="date-group"';
+
+                html += `<div${pastCss}${groupId}>`;
+
+                if (today) {
+                    html += `<h2>${formatDate(firstDate)}<span class="day-name"> &mdash; Today</span></h2>`;
                     html += '<div class="today-marker">Today\'s hearings</div>';
+                } else if (past) {
+                    html += `<h2 style="opacity:0.6;cursor:pointer" onclick="this.parentElement.classList.toggle('collapsed-group')">${formatDate(firstDate)} <span class="day-name">(past &mdash; click to expand)</span></h2>`;
+                } else {
+                    html += `<h2>${formatDate(firstDate)}</h2>`;
                 }
 
                 for (const h of dayHearings) {
@@ -746,7 +787,7 @@
                             html += '</div>';
                         }
                     } else {
-                        html += '<div class="no-matches">No closely matching GAO reports found for this hearing.</div>';
+                        html += '<div class="no-matches">No closely matching GAO reports found among the ' + data.reportCount + ' reports indexed. GAO may not have recently published on this topic.</div>';
                     }
 
                     html += '</div>'; // reports-section
@@ -763,10 +804,18 @@
 
             content.innerHTML = html;
 
+            // Collapse past date groups by default
+            document.querySelectorAll('.past-group').forEach(g => g.classList.add('collapsed-group'));
+
+            // Auto-scroll to today
+            setTimeout(() => jumpToToday(), 100);
+
             // Update stats
             const totalMatches = hearings.reduce((sum, h) => sum + (h.matchedReports ? h.matchedReports.length : 0), 0);
+            const genDate = new Date(data.generated);
             document.getElementById('stats').textContent =
-                `${hearings.length} hearings | ${data.reportCount} GAO reports indexed | ${totalMatches} matches | Updated ${new Date(data.generated).toLocaleTimeString()}`;
+                `${hearings.length} hearings | ${data.reportCount} GAO reports indexed | ${totalMatches} matches`;
+            document.getElementById('stats').title = `Last updated: ${genDate.toLocaleString()}`;
         }
 
         async function loadData() {

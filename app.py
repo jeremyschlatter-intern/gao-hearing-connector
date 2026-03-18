@@ -302,8 +302,106 @@ def fetch_gao_reports():
 
 
 # ---------------------------------------------------------------------------
-# Matching engine: TF-IDF cosine similarity
+# Matching engine: TF-IDF cosine similarity + synonym expansion
 # ---------------------------------------------------------------------------
+
+# Domain-specific synonyms and related terms for Congressional/policy context.
+# When a term is found in text, its synonyms are appended to improve matching.
+POLICY_SYNONYMS = {
+    # Health
+    "opioid": "substance abuse drug addiction fentanyl overdose narcotics",
+    "fentanyl": "opioid substance abuse drug overdose narcotics",
+    "medicare": "health care CMS elderly seniors hospital physician",
+    "medicaid": "health care CMS low income hospital physician",
+    "mental health": "behavioral health substance abuse suicide psychology",
+    "pandemic": "public health disease outbreak infectious CDC",
+    "vaccine": "immunization public health CDC pandemic",
+    "abortion": "reproductive health family planning",
+    # Defense
+    "military": "defense armed forces DOD pentagon",
+    "pentagon": "defense DOD military armed forces",
+    "weapons": "defense military arms procurement acquisition",
+    "missile": "defense military weapons nuclear ICBM",
+    "readiness": "military defense force posture training",
+    "veterans": "VA military service members benefits",
+    "cybersecurity": "information security cyber attacks hacking data breach",
+    "AI": "artificial intelligence machine learning automation technology",
+    "artificial intelligence": "AI machine learning automation technology",
+    # Economy/Finance
+    "inflation": "prices economy cost of living consumer",
+    "tariff": "trade import export customs duties",
+    "trade": "commerce export import tariff international",
+    "small business": "SBA entrepreneurship main street startup",
+    "main street": "small business SBA entrepreneurship",
+    "cryptocurrency": "digital currency bitcoin blockchain fintech",
+    "banking": "financial institutions FDIC federal reserve",
+    "student loan": "higher education college debt borrower",
+    # Energy/Environment
+    "climate": "environment global warming emissions carbon greenhouse",
+    "emissions": "climate pollution environment carbon greenhouse",
+    "renewable": "solar wind energy clean power",
+    "nuclear": "energy power reactor NRC radiation",
+    "power grid": "electricity energy reliability infrastructure utility",
+    "electric": "power energy grid utility",
+    "PFAS": "persistent chemicals contamination drinking water environmental",
+    "wildfire": "forest fire natural disaster emergency",
+    # Immigration
+    "immigration": "border ICE asylum deportation migrant refugee",
+    "border": "immigration ICE CBP customs patrol",
+    "asylum": "immigration refugee border migrant",
+    "deportation": "immigration removal ICE enforcement",
+    # Tech/Communications
+    "broadband": "internet telecommunications connectivity rural access",
+    "5G": "telecommunications wireless broadband spectrum",
+    "social media": "technology platform online content moderation",
+    "privacy": "data protection consumer information security",
+    # Transportation
+    "aviation": "FAA airline airport flight safety",
+    "railroad": "rail train transportation infrastructure freight",
+    "highway": "road transportation infrastructure DOT",
+    "shipping": "maritime ports trade cargo vessel",
+    # Education
+    "K-12": "education school student teacher elementary secondary",
+    "higher education": "college university student loan tuition",
+    "education": "school student learning teacher",
+    # Housing
+    "housing": "HUD rent mortgage affordable homeless shelter",
+    "homeless": "housing shelter affordable HUD",
+    # Justice
+    "gun": "firearm weapon violence ATF background check",
+    "firearm": "gun weapon violence ATF",
+    "prison": "incarceration criminal justice corrections BOP",
+    "law enforcement": "police FBI DOJ criminal justice",
+    # Agencies (expand abbreviations)
+    "EPA": "environmental protection agency environment pollution",
+    "FDA": "food drug administration safety pharmaceutical",
+    "DOD": "department defense military pentagon",
+    "DHS": "department homeland security border immigration TSA",
+    "DOE": "department energy nuclear renewable",
+    "HHS": "department health human services medicare medicaid",
+    "DOT": "department transportation highway aviation railroad",
+    "USDA": "department agriculture food farm rural",
+    "NASA": "space aeronautics satellite",
+    "FEMA": "emergency management disaster relief flood",
+    "IRS": "tax revenue internal service",
+    "SSA": "social security administration retirement disability benefits",
+    "USPS": "postal service mail delivery",
+}
+
+
+def expand_with_synonyms(text):
+    """Expand text with domain-specific synonyms to improve matching."""
+    if not text:
+        return text
+    text_lower = text.lower()
+    expansions = []
+    for term, synonyms in POLICY_SYNONYMS.items():
+        if term.lower() in text_lower:
+            expansions.append(synonyms)
+    if expansions:
+        return text + " " + " ".join(expansions)
+    return text
+
 
 def build_hearing_text(hearing):
     """Build a text representation of a hearing for matching."""
@@ -326,7 +424,8 @@ def build_hearing_text(hearing):
         if w.get("name"):
             parts.append(w["name"])
 
-    return " ".join(parts)
+    text = " ".join(parts)
+    return expand_with_synonyms(text)
 
 
 def build_report_text(report):
@@ -344,7 +443,8 @@ def build_report_text(report):
     for topic in report.get("topics", []):
         parts.append(topic)
 
-    return " ".join(parts)
+    text = " ".join(parts)
+    return expand_with_synonyms(text)
 
 
 def match_hearings_to_reports(hearings, reports, top_n=5, min_score=0.05):
