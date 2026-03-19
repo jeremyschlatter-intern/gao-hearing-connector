@@ -23,7 +23,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
 
-CONGRESS_API_KEY = "CONGRESS_API_KEY"
+CONGRESS_API_KEY = os.environ.get("CONGRESS_API_KEY", "DEMO_KEY")
 CONGRESS_API_BASE = "https://api.congress.gov/v3"
 CURRENT_CONGRESS = 119
 
